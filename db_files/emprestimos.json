@@ -10,7 +10,8 @@
       "endereco": "Avenida Central, 45"
     },
     "livro": "Iracema",
-    "devolucao": "2000-01-01"
+    "devolucao": "2026-06-13",
+    "inicio": "2026-05-29"
   },
   "476258": {
     "aluno": {
@@ -23,7 +24,8 @@
       "endereco": "Bairro da Paz, Bloco A"
     },
     "livro": "O Cortico",
-    "devolucao": "2000-01-01"
+    "devolucao": "2026-06-16",
+    "inicio": "2026-06-01"
   },
   "859967": {
     "aluno": {
@@ -36,7 +38,8 @@
       "endereco": "Alameda dos Pinheiros, 22"
     },
     "livro": "O Cortico",
-    "devolucao": "2000-01-01"
+    "devolucao": "2026-06-19",
+    "inicio": "2026-06-04"
   },
   "82009": {
     "aluno": {
@@ -49,7 +52,8 @@
       "endereco": "Rua das Palmeiras, 56"
     },
     "livro": "O Cortico",
-    "devolucao": "2000-01-01"
+    "devolucao": "2026-06-22",
+    "inicio": "2026-06-07"
   },
   "641208": {
     "aluno": {
@@ -62,7 +66,8 @@
       "endereco": "Rua do Sol, 8"
     },
     "livro": "Sao Bernardo",
-    "devolucao": "2000-01-01"
+    "devolucao": "2026-06-25",
+    "inicio": "2026-06-10"
   },
   "476349": {
     "aluno": {
@@ -75,6 +80,7 @@
       "endereco": "Rua da Ponte, 67"
     },
     "livro": "O Retrato De Dorian Gray",
-    "devolucao": "2000-01-01"
+    "devolucao": "2026-06-28",
+    "inicio": "2026-06-13"
   }
 }
