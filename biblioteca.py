@@ -1806,80 +1806,276 @@ def faz_msg_box(titulo, mensagem, erro=False):
 
 #Configurações da janela de Emprestimo
 class JanelaEmprestimo(QDialog):
+
+
     def __init__(self, biblioteca: Biblioteca, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.biblioteca = biblioteca
+        self.setWindowTitle("Empréstimo de Livro")
+        self.setMinimumSize(520, 360)
         self.setStyleSheet("""
-            QDialog, QWidget {
-                background-color: #1a1a2e;
-                color: #e0e0e0;
-            }
-            QLabel {
-                color: #e0e0e0;
-            }
-            QLineEdit, QComboBox, QSpinBox {
+            QDialog, QWidget { background-color: #1a1a2e; color: #e0e0e0; }
+            QLabel            { color: #e0e0e0; }
+            QLineEdit, QDateEdit {
                 background: rgba(255,255,255,0.05);
-                border: 1px solid rgba(173, 73, 225, 0.3);
-                border-radius: 6px;
-                padding: 7px 12px;
-                color: #e0e0e0;
+                border: 1px solid rgba(173,73,225,0.3);
+                border-radius: 6px; padding: 7px 12px; color: #e0e0e0;
             }
             QPushButton {
-                background: rgba(173, 73, 225, 0.2);
-                border: 1px solid rgba(173, 73, 225, 0.4);
-                border-radius: 6px;
-                padding: 8px 18px;
-                color: #e0e0e0;
+                background: rgba(173,73,225,0.2);
+                border: 1px solid rgba(173,73,225,0.4);
+                border-radius: 6px; padding: 8px 18px; color: #e0e0e0;
             }
-            QPushButton:hover {
-                background: rgba(173, 73, 225, 0.35);
-            }
+            QPushButton:hover { background: rgba(173,73,225,0.35); }
         """)
-        self.biblioteca = biblioteca  
-        self.setWindowTitle("Empréstimo de Livro")
-        self.setMinimumSize(500, 200)
- 
- # Adicionando os campos necessários
-        self._id = QLineEdit() 
-        self.livro = QLineEdit()  
-        self.data = QDateEdit() 
-        self.data.setCalendarPopup(True)
 
-        # Layout
-        layout = QFormLayout()
+        from PySide6.QtCore import QDate
+
+        layout = QFormLayout(self)
+
+        self._id = QLineEdit()
         layout.addRow("ID do Aluno:", self._id)
-        layout.addRow("Título do Livro:", self.livro)
-        layout.addRow("Data de Devolução:", self.data)
-        self.setLayout(layout)
 
-        # Botões
+        self.livro = QLineEdit()
+        layout.addRow("Título do Livro:", self.livro)
+
+        self.data_inicio = QDateEdit()
+        self.data_inicio.setCalendarPopup(True)
+        self.data_inicio.setDate(QDate.currentDate())
+        layout.addRow("Data de Início:", self.data_inicio)
+
+        self.data_fim = QDateEdit()
+        self.data_fim.setCalendarPopup(True)
+        self.data_fim.setDate(QDate.currentDate().addDays(15))
+        layout.addRow("Data de Devolução:", self.data_fim)
+
+        
+        self.status_intervalo = QLabel("Selecione as datas para verificar disponibilidade.")
+        self.status_intervalo.setWordWrap(True)
+        self.status_intervalo.setStyleSheet("color: #aaaaaa; font-style: italic;")
+        layout.addRow("📅 Disponibilidade:", self.status_intervalo)
+
         b_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         b_box.accepted.connect(self.realiza_emprestimo)
         b_box.rejected.connect(self.reject)
         layout.addWidget(b_box)
 
-    def verifica_campos(self, _id, livro, data):
-        """Verificar se todos os campos foram preenchidos."""
-        if not _id or not livro or not data:
-            return False
-        return True
+        
+        self.data_inicio.dateChanged.connect(self._verificar_disponibilidade)
+        self.data_fim.dateChanged.connect(self._verificar_disponibilidade)
+        self._id.textChanged.connect(self._verificar_disponibilidade)
+        self.livro.textChanged.connect(self._verificar_disponibilidade)
 
+
+    def _verificar_disponibilidade(self):
+        """Consulta a RBTIntervalos e atualiza o label de status."""
+        from datetime import date as _date
+
+        inicio_q = self.data_inicio.date()
+        fim_q    = self.data_fim.date()
+
+        if fim_q < inicio_q:
+            self.status_intervalo.setText("⚠️  A data de devolução é anterior ao início.")
+            self.status_intervalo.setStyleSheet("color: #ff9800; font-weight: bold;")
+            return
+
+        inicio = _date(inicio_q.year(), inicio_q.month(), inicio_q.day())
+        fim    = _date(fim_q.year(),    fim_q.month(),    fim_q.day())
+
+        if not self.biblioteca.rbt_intervalos:
+            return
+
+        titulo_digitado = self.livro.text().strip().lower()
+        _id = self._id.text().strip()
+
+        todos, _, _ = self.biblioteca.rbt_intervalos.buscar_todos_sobrepostos(inicio, fim)
+
+        # 1) Mesmo aluno já tem empréstimo no período
+        if _id:
+            for emp in todos:
+                aluno_emp = emp.get("aluno", {})
+                id_emp = aluno_emp.get("id") if isinstance(aluno_emp, dict) else None
+                if id_emp == _id:
+                    livro_emp = emp.get("livro", "?")
+                    dev_emp   = emp.get("devolucao", "?")
+                    self.status_intervalo.setText(
+                        f"🔴  Este aluno já possui '{livro_emp}' emprestado até {dev_emp}."
+                    )
+                    self.status_intervalo.setStyleSheet("color: #f44336; font-weight: bold;")
+                    return
+
+        # 2) Todos os exemplares do livro estão emprestados no período
+        if titulo_digitado:
+            qtd_exemplares = 0
+            for dados in self.biblioteca.info_livros.values():
+                if isinstance(dados, dict) and dados.get("titulo", "").lower() == titulo_digitado:
+                    qtd_exemplares = int(dados.get("quantidade", 1))
+                    break
+            if qtd_exemplares == 0:
+                qtd_exemplares = 1
+
+            emprestimos_livro = [
+                emp for emp in todos
+                if emp.get("livro", "").lower() == titulo_digitado
+            ]
+            if len(emprestimos_livro) >= qtd_exemplares:
+                dev_conf = emprestimos_livro[0].get("devolucao", "?")
+                self.status_intervalo.setText(
+                    f"🔴  Todos os {qtd_exemplares} exemplar(es) estão emprestados neste período "
+                    f"(devolução mais próxima: {dev_conf})."
+                )
+                self.status_intervalo.setStyleSheet("color: #f44336; font-weight: bold;")
+                return
+
+        # Período livre
+        self.status_intervalo.setText(
+            f"✅  Período disponível: {inicio.strftime('%d/%m/%Y')} → {fim.strftime('%d/%m/%Y')}"
+        )
+        self.status_intervalo.setStyleSheet("color: #4caf50; font-weight: bold;")
+
+    
     def realiza_emprestimo(self):
-        """Processa o empréstimo após a verificação dos campos."""
-        _id = self._id.text()  # Obtendo o valor do campo de ID
-        livro = self.livro.text()  
-        data = self.data.date().toString('yyyy-MM-dd')  
+        """Processa o empréstimo; bloqueia se houver conflito."""
+        _id   = self._id.text().strip()
+        livro = self.livro.text().strip()
+        inicio = self.data_inicio.date().toString("yyyy-MM-dd")
+        fim    = self.data_fim.date().toString("yyyy-MM-dd")
 
-        # Verifica se os campos estão preenchidos corretamente
-        if self.verifica_campos(_id, livro, data):
-            try:
-                chave, msg = self.biblioteca.fazer_emprestimo(_id, livro, data)
-                faz_msg_box("Empréstimo realizado!", f"Chave do empréstimo: {chave}", False)
-            except KeyError as e:
-                faz_msg_box("Erro", f"ID de aluno não encontrado: {e}", True)
-            except ValueError as e:
-                faz_msg_box("Erro", str(e), True)
-        else:
-            faz_msg_box("Erro", "Todos os campos precisam ser preenchidos!", True)
+        if not _id or not livro:
+            faz_msg_box("Erro", "Preencha o ID do aluno e o título do livro.", True)
+            return
+
+        try:
+            chave, _ = self.biblioteca.fazer_emprestimo(_id, livro, fim, inicio=inicio)
+            faz_msg_box(
+                "Empréstimo realizado! ✅",
+                f"Livro: {livro}\nChave: {chave}\n"
+                f"Devolução prevista: {fim}",
+                False,
+            )
+            self.accept()
+        except KeyError as e:
+            faz_msg_box("Erro", f"ID de aluno não encontrado: {e}", True)
+        except ValueError as e:
+            faz_msg_box("Conflito de datas — Empréstimo bloqueado 🔴", str(e), True)
+
+
+class PainelRelatorio(QWidget):
+
+    ESTILO = """
+        QWidget { background: #1a1a2e; color: #e0e0e0; }
+        QLabel  { color: #e0e0e0; }
+        QLabel#titulo   { color: #AD49E1; font-size: 16px; font-weight: bold; }
+        QPushButton {
+            background: rgba(173,73,225,0.25);
+            border: 1px solid rgba(173,73,225,0.5);
+            border-radius: 6px; padding: 8px 20px; color: #e0e0e0;
+        }
+        QPushButton:hover { background: rgba(173,73,225,0.4); }
+        QDateEdit {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(173,73,225,0.3);
+            border-radius: 5px; padding: 5px; color: #e0e0e0;
+        }
+        QTableWidget {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(173,73,225,0.12);
+            border-radius: 8px; gridline-color: rgba(255,255,255,0.04);
+        }
+        QHeaderView::section {
+            background: rgba(173,73,225,0.07);
+            color: rgba(173,73,225,1.0); padding: 6px;
+            border: none; font-weight: bold;
+        }
+        QTableWidget::item { padding: 4px; }
+        QTableWidget::item:selected { background: rgba(173,73,225,0.2); }
+    """
+
+    def __init__(self, biblioteca, parent=None):
+        super().__init__(parent)
+        self.biblioteca = biblioteca
+        self.setStyleSheet(self.ESTILO)
+        self._construir_ui()
+
+    def _construir_ui(self):
+        from PySide6.QtCore import QDate
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 20, 24, 20)
+        root.setSpacing(14)
+
+        titulo = QLabel("📊 Relatório de Empréstimos por Período")
+        titulo.setObjectName("titulo")
+        root.addWidget(titulo)
+
+        periodo = QHBoxLayout()
+        periodo.addWidget(QLabel("De:"))
+
+        self.date_inicio = QDateEdit()
+        self.date_inicio.setCalendarPopup(True)
+        self.date_inicio.setDate(QDate.currentDate().addDays(-30))
+        periodo.addWidget(self.date_inicio)
+
+        periodo.addSpacing(12)
+        periodo.addWidget(QLabel("Até:"))
+
+        self.date_fim = QDateEdit()
+        self.date_fim.setCalendarPopup(True)
+        self.date_fim.setDate(QDate.currentDate().addDays(30))
+        periodo.addWidget(self.date_fim)
+
+        periodo.addSpacing(20)
+        btn = QPushButton("🔍  Gerar Relatório")
+        btn.clicked.connect(self._gerar)
+        periodo.addWidget(btn)
+        periodo.addStretch()
+        root.addLayout(periodo)
+
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(5)
+        self.tabela.setHorizontalHeaderLabels(
+            ["Chave", "Aluno", "Livro", "Início", "Devolução"]
+        )
+        self.tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabela.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+        root.addWidget(self.tabela)
+
+    def _gerar(self):
+        """Consulta a RBTIntervalos e popula a tabela."""
+        from datetime import date as _date
+
+        if not self.biblioteca.rbt_intervalos:
+            return
+
+        qi = self.date_inicio.date()
+        qf = self.date_fim.date()
+        inicio = _date(qi.year(), qi.month(), qi.day())
+        fim    = _date(qf.year(),  qf.month(),  qf.day())
+
+        resultados, _, _ = self.biblioteca.rbt_intervalos.buscar_todos_sobrepostos(
+            inicio, fim
+        )
+
+        self.tabela.setRowCount(0)
+        for emp in resultados:
+            row = self.tabela.rowCount()
+            self.tabela.insertRow(row)
+
+            aluno_info = emp.get("aluno", {})
+            nome_aluno = aluno_info.get("nome", "?") if isinstance(aluno_info, dict) else str(aluno_info)
+
+            for col, valor in enumerate([
+                emp.get("chave", "?"),
+                nome_aluno,
+                emp.get("livro", "?"),
+                emp.get("inicio", "?"),
+                emp.get("devolucao", "?"),
+            ]):
+                item = QTableWidgetItem(str(valor))
+                item.setForeground(Qt.white)
+                self.tabela.setItem(row, col, item)
+
 
 class JanelaDevolucao(QDialog):
     def __init__(self, biblioteca: Biblioteca, *args, **kwargs) -> None:
