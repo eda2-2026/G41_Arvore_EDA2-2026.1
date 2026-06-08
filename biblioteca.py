@@ -76,6 +76,7 @@ class Biblioteca:
         self._atribuir_notas_iniciais()
         
         self.bst = None
+        self.rbt_intervalos = None
         self.indice_invertido = None
         self.buscador_fuzzy = None
         self.motor = None
@@ -115,16 +116,23 @@ class Biblioteca:
             self.exportacao(INFO_LIVROS, self.info_livros)
 
     def inicializar_indices(self):
+        from indices.rbt_livros import RBTBiblioteca 
+        from indices.rbt_intervalos import RBTIntervalos
         from indices.bst_livros import BSTBiblioteca
         from indices.indice_invertido import IndiceInvertido
         from indices.busca_aproximada import BuscaAproximada
         from indices.motor_busca import MotorBusca
 
         livros_lista = list(self.info_livros.values())
+
+        self.bst = RBTBiblioteca()
         
-        self.bst = BSTBiblioteca()
         self.bst.construir_de_lista(livros_lista)
-        print(f"[BST] {len(livros_lista)} livros indexados.")
+        print(f"[RBT-Livros] {len(livros_lista)} livros indexados.")
+        
+        self.rbt_intervalos = RBTIntervalos()
+        self.rbt_intervalos.construir_de_emprestimos(self.emprestimos)
+        print(f"[RBT-Intervalos] Árvore de conflito de datas pronta.")
 
         self.indice_invertido = IndiceInvertido()
         self.indice_invertido.construir(livros_lista)
@@ -193,62 +201,116 @@ class Biblioteca:
             self.indice_invertido.atualizar(self.info_livros[numeracao])
         return self.info_livros[numeracao]
 
-    def fazer_emprestimo(self, _id, livro, devo):
+    def fazer_emprestimo(self, _id, livro, devo, inicio=None):
+        from datetime import date as _date
+
+        data_inicio = _date.fromisoformat(inicio) if inicio else _date.today()
+        data_fim = _date.fromisoformat(devo)
+
+        if data_fim < data_inicio:
+            raise ValueError(
+                "A data de devolução não pode ser anterior à data de início."
+            )
+
+        if self.rbt_intervalos:
+            todos, _, _ = self.rbt_intervalos.buscar_todos_sobrepostos(data_inicio, data_fim)
+            aluno_info_novo = self.info_alunos.get(_id, {})
+            nome_novo = aluno_info_novo.get("nome", _id) if isinstance(aluno_info_novo, dict) else str(aluno_info_novo)
+            for emp in todos:
+                aluno_emp = emp.get("aluno", {})
+                id_emp = aluno_emp.get("id") if isinstance(aluno_emp, dict) else None
+                if id_emp == _id:
+                    livro_emp = emp.get("livro", "?")
+                    dev_emp   = emp.get("devolucao", "?")
+                    raise ValueError(
+                        f"O aluno '{nome_novo}' já possui o livro '{livro_emp}' "
+                        f"emprestado até {dev_emp} neste período."
+                    )
+
+            titulo_normalizado = livro.strip().lower()
+            qtd_exemplares = 0
+            for dados in self.info_livros.values():
+                if isinstance(dados, dict) and dados.get("titulo", "").lower() == titulo_normalizado:
+                    qtd_exemplares = int(dados.get("quantidade", 1))
+                    break
+            if qtd_exemplares == 0:
+                qtd_exemplares = 1  
+
+            emprestimos_do_livro = [
+                emp for emp in todos
+                if emp.get("livro", "").lower() == titulo_normalizado
+            ]
+            if len(emprestimos_do_livro) >= qtd_exemplares:
+                conflito = emprestimos_do_livro[0]
+                dev_conf = conflito.get("devolucao", "?")
+                raise ValueError(
+                    f"Todos os {qtd_exemplares} exemplar(es) de '{livro.title()}' "
+                    f"estão emprestados neste período (devolução mais próxima: {dev_conf})."
+                )
+
         chave = str(datetime.now().microsecond)
         self.emprestimos[chave] = {
             "aluno": self.info_alunos[_id],
             "livro": livro.title(),
-            "devolucao": devo
+            "inicio": str(data_inicio),
+            "devolucao": devo,
         }
         self.id_emprestimo[chave] = _id
         self.exportacao(EMPRESTIMOS, self.emprestimos)
         self.exportacao(ID_EMPRESTIMO, self.id_emprestimo)
+        
+        if self.rbt_intervalos:
+            dados_intervalo = dict(self.emprestimos[chave])
+            dados_intervalo["chave"] = chave
+            self.rbt_intervalos.inserir(data_inicio, data_fim, dados_intervalo)
 
         for numeracao, dados in self.info_livros.items():
-            if isinstance(dados, dict) and dados.get("titulo", "").lower() == str(livro).lower():
-                incrementar_emprestimo(self.info_livros, numeracao)
-                self.exportacao(INFO_LIVROS, self.info_livros)
-                break
+                if isinstance(dados, dict) and dados.get("titulo", "").lower() == str(livro).lower():
+                    incrementar_emprestimo(self.info_livros, numeracao)
+                    self.exportacao(INFO_LIVROS, self.info_livros)
+                    break
 
         return chave, self.emprestimos[chave]
 
     def fazer_devolucao(self, chave):
-        emprestimo = self.emprestimos.get(chave)
-        if not emprestimo:
-            return
+            emprestimo = self.emprestimos.get(chave)
+            if not emprestimo:
+                return
 
-        # Busca nome do aluno
-        aluno_info = emprestimo.get("aluno", {})
-        if isinstance(aluno_info, dict):
-            nome_aluno = aluno_info.get("nome", "Desconhecido")
-        else:
-            nome_aluno = str(aluno_info)
+            aluno_info = emprestimo.get("aluno", {})
+            if isinstance(aluno_info, dict):
+                nome_aluno = aluno_info.get("nome", "Desconhecido")
+            else:
+                nome_aluno = str(aluno_info)
 
-        chave_devolucao = f"DEV-{chave}"
-        self.historico_devolucoes[chave_devolucao] = {
-            "chave_emprestimo": chave,
-            "livro": emprestimo.get("livro", ""),
-            "aluno": nome_aluno,
-            "data_devolucao": datetime.now().strftime("%d/%m/%Y %H:%M")
-        }
-        self.exportacao(HISTORICO_DEVOLUCOES, self.historico_devolucoes)
+            chave_devolucao = f"DEV-{chave}"
+            self.historico_devolucoes[chave_devolucao] = {
+                "chave_emprestimo": chave,
+                "livro": emprestimo.get("livro", ""),
+                "aluno": nome_aluno,
+                "data_devolucao": datetime.now().strftime("%d/%m/%Y %H:%M")
+            }
+            self.exportacao(HISTORICO_DEVOLUCOES, self.historico_devolucoes)
 
-        self.emprestimos.pop(chave)
-        self.id_emprestimo.pop(chave)
-        self.exportacao(EMPRESTIMOS, self.emprestimos)
-        self.exportacao(ID_EMPRESTIMO, self.id_emprestimo)
- 
+            self.emprestimos.pop(chave)
+            self.id_emprestimo.pop(chave)
+            self.exportacao(EMPRESTIMOS, self.emprestimos)
+            self.exportacao(ID_EMPRESTIMO, self.id_emprestimo)
+
+            if self.rbt_intervalos:
+                self.rbt_intervalos.remover_por_chave(chave)
+
     def avaliar_livro(self, livro_id: str, nota: float) -> dict | None:
-        resultado = registrarAvaliacao(self.info_livros, livro_id, nota)
-        if resultado:
-            self.exportacao(INFO_LIVROS, self.info_livros)
-        return resultado
+            resultado = registrarAvaliacao(self.info_livros, livro_id, nota)
+            if resultado:
+                self.exportacao(INFO_LIVROS, self.info_livros)
+            return resultado
 
     def listar_livros_alfabetico(self, reverso: bool = False) -> list:
-        return ordenar_por_titulo(self.info_livros, reverso=reverso)
+            return ordenar_por_titulo(self.info_livros, reverso=reverso)
 
     def listar_livros_por_ano(self, reverso: bool = False) -> list:
-        return radix_sort_por_ano(list(self.info_livros.values()), reverso=reverso)
+            return radix_sort_por_ano(list(self.info_livros.values()), reverso=reverso)
  
 class JanelaPrincipal(QMainWindow):
 
@@ -277,12 +339,15 @@ class JanelaPrincipal(QMainWindow):
         self.painel_alunos = self._criar_painel_alunos()
         self.painel_emprestimos = self._criar_painel_emprestimos()
         self.painel_devolucoes = self._criar_painel_devolucoes()
-        
+
+        self.painel_relatorio = PainelRelatorio(self.b1)
+
         self.stacked.addWidget(self.painel_acervo)        
         self.stacked.addWidget(self.painel_alunos)        
         self.stacked.addWidget(self.painel_emprestimos)  
         self.stacked.addWidget(self.painel_devolucoes)    
-        
+        self.stacked.addWidget(self.painel_relatorio)
+
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.stacked)
         self.splitter.setSizes([220, 1280])
@@ -296,7 +361,6 @@ class JanelaPrincipal(QMainWindow):
         self._atualizar_cards()
     
     def _criar_sidebar(self) -> QFrame:
-        """Cria sidebar com navegação"""
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(220)
@@ -340,7 +404,11 @@ class JanelaPrincipal(QMainWindow):
         self.btn_devolucoes.clicked.connect(lambda: self._switch_panel(3, self.btn_devolucoes))
         layout.addWidget(self.btn_devolucoes)
         
-        self.nav_buttons = [self.btn_acervo, self.btn_alunos, self.btn_emprestimos, self.btn_devolucoes]
+        self.btn_relatorio = self._criar_botao_nav("📊 Relatório")
+        self.btn_relatorio.clicked.connect(lambda: self._switch_panel(4, self.btn_relatorio))
+        layout.addWidget(self.btn_relatorio)
+
+        self.nav_buttons = [self.btn_acervo, self.btn_alunos, self.btn_emprestimos, self.btn_devolucoes, self.btn_relatorio]
         
         separador2 = QFrame()
         separador2.setFrameShape(QFrame.HLine)
@@ -368,7 +436,6 @@ class JanelaPrincipal(QMainWindow):
         return sidebar
     
     def _criar_botao_nav(self, texto: str, ativo: bool = False) -> QPushButton:
-        """Cria um botão de navegação da sidebar"""
         btn = QPushButton(texto)
         btn.setObjectName("nav-btn")
         btn.setProperty("active", ativo)
@@ -399,8 +466,6 @@ class JanelaPrincipal(QMainWindow):
         return btn
     
     def _switch_panel(self, index: int, btn: QPushButton):
-        """Troca entre painéis e atualiza estilo do botão"""
-        # Desativa todos os botões
         for b in self.nav_buttons:
             b.setProperty("active", False)
             b.style().unpolish(b)
@@ -423,7 +488,6 @@ class JanelaPrincipal(QMainWindow):
         self._atualizar_cards()
          
     def _criar_painel_acervo(self) -> QWidget:
-        """Cria painel de acervo de livros"""
         painel = QWidget()
         layout = QVBoxLayout(painel)
         layout.setContentsMargins(16, 16, 16, 16)
