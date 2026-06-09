@@ -1,10 +1,11 @@
 [🇧🇷 Português](README.md) | 🇺🇸 **English**
-<H1> Sorting Algorithms Project - Library System (SB) 📚 </H1>
+
+<H1> Data Structures Project - Library System (SB) 📚 </H1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Status-Completed-green?style=flat-square" alt="Status">
   <img src="https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Sorting-Quick%20%7C%20Heap%20%7C%20Radix-purple?style=flat-square" alt="Sorting">
+  <img src="https://img.shields.io/badge/Trees-BST%20%7C%20RBT%20%7C%20RBT--Intervals-orange?style=flat-square" alt="Trees">
 </p>
 
 <p align="center">
@@ -12,29 +13,31 @@
 </p>
 
 ---
-## 📹 Video explaining the project
-[Vídeo do youtube](https://youtu.be/UAIRmwX32W8?si=Yz6uVB2m9AqBAE1p)
 
+## 📹 Video explaining the project
+[YouTube Video]()
+
+---
 
 ## 📝 Description
 
 The **Library System (SB)** is a Python application designed to be fast and user-friendly. Featuring a modern dark mode interface, it was built to ensure fluid navigation and catalog organization, without freezing or unnecessary wait times.
 
-In this new version, the main focus of the system is the **dynamic structuring and sorting of data**. To handle different types of information (text, integers, decimals, and dates), the system applies specific approaches to each table column. This includes using **Quick Sort** for alphabetical categorization, **Heap Sort** for precise rating rankings, and **Radix Sort (MSD)** for chronological sorting.
+In this new version, the main focus of the system is the **efficient data indexing and searching through tree structures**. To handle different query needs, ID lookup, text search, and loan date conflict detection, the system implements three distinct tree structures: **BST**, **Red-Black Tree (RBT)**, and **Interval RBT**.
 
-Ultimately, the system can instantly list, reorganize, and reverse large amounts of books, maintaining a perfect balance between algorithmic efficiency and a simple, pleasant everyday user experience.
+Ultimately, the system can instantly index, locate, and verify conflicts across large amounts of books and loans, maintaining a perfect balance between algorithmic efficiency and a simple, pleasant everyday user experience.
 
-## 💡 Technical Differentials - Sorting Algorithms
+## 💡 Technical Highlights - Tree Structures
 
-The major highlight of this update is the Sorting Module, which utilizes different algorithmic strategies depending on the column selected by the user in the interface:
+The major highlight of this update is the Index Module, which uses different tree structures depending on the operation performed in the system:
 
-- **Quick Sort:** Implemented as the primary (all-rounder) algorithm for sorting *strings* (Title, Author, Genre) and simple integers (ID Numbering and Loan Count). It ensures speed in alphabetical and popularity organization.
-- **Heap Sort:** Structured specifically to organize books based on floating-point numbers (*floats*). It is triggered when the user wants to view the highest or lowest Average Rating scores in the catalog.
-- **Radix Sort (MSD):** Implemented with the *Most Significant Digit* recursive approach using *buckets* separation. It is the ideal algorithm for sorting fixed-size integers, applied exclusively to sort Publication Years.
-- **Merge Sort:** A divide-and-conquer algorithm implemented in the system's core library, ensuring flexibility and stability as a baseline alternative for data processing.
+- **BST (Binary Search Tree):** Implemented as the base structure for indexing books by their number (ID). Guarantees exact lookup in O(log n) average and range queries in O(log n + k). Kept in the project as a reference its O(n) worst-case limitation (sequential ascending insertions) justifies and documents the need for the RBT.
 
+- **RBT (Red-Black Tree):** Replaces the BST as the primary indexing structure, guaranteeing automatic balancing after every insertion and deletion. Maintains the three classic invariants (black root, no consecutive red children, equal black-node count on every root-to-leaf path), maximum height of 2·log₂(n+1), and O(log n) guaranteed in the worst case, including for sequential insertions. Uses a shared `_nil` sentinel node to avoid scattered `None` checks throughout the code.
 
-## 🌐 Sorting Demonstration
+- **Interval RBT:** Extension of the standard RBT to store loan periods `[start, end]`. Each node maintains an extra field `max_fim` the largest return date in its entire subtree which allows pruning entire branches during overlap searches. Used to check, in O(log n), whether a book is already borrowed during the same period before registering a new loan.
+
+## 🌐 Demonstration
 
 <p align="center">
   <img src="https://i.postimg.cc/SNcGH7Z9/image.png" width="600">
@@ -48,11 +51,12 @@ The major highlight of this update is the Sorting Module, which utilizes differe
 
 ## 🎯 Features
 
-- **Dynamic Table Sorting:** Click on any table header to instantly organize the catalog, with support for reverse sorting (Ascending/Descending or A-Z/Z-A).
+- **ID-Based Search:** The RBT indexes all books by number and performs exact and range lookups in O(log n).
+- **Loan Conflict Detection:** The Interval RBT checks in O(log n) whether a book is already borrowed during a given period, using the `max_fim` field to prune irrelevant branches.
 - **Catalog Management:** Detailed book registration, including title, author, genre, and stock.
 - **Student Registration:** Centralized user control, securely storing enrollment and contact data.
 - **Dynamic Editing:** Allows updating information for already registered books and students, keeping the database always up to date.
-- **Loan and Popularity Control:** Agile checkout logging, associating the student with the book and automatically counting the number of times the work has been borrowed.
+- **Loan and Popularity Control:** Agile checkout logging, associating the student with the book and automatically counting the number of times it has been borrowed.
 - **Returns and Ratings Management:** Automatic loan discharge with an integrated feature for the student to register a 0 to 5-star rating for the returned work.
 
 ---
@@ -65,18 +69,18 @@ Before running the program, make sure you have the following requirements instal
 
 **2. Dependencies:**
 
-- PySide6; and 
+- PySide6; and
 - qdarktheme.
 
-**3.Operating System: Windows, macOS, or Linux**
+**3. Operating System: Windows, macOS, or Linux.**
 
- ---
+---
 
 ## 🚀 Running the Project
 
-**1. Instalar o python**
+**1. Install Python**
 
-Check if you have Python 3.10 or higher installed. To do this, follow these steps:
+Check if you have **Python 3.10 or higher** installed. To do this, follow the steps below:
 
 Open the Terminal (on Windows, use Command Prompt or PowerShell).
 
@@ -110,10 +114,12 @@ Navigate to the project directory in the terminal and run the following command 
 pip install -r requirements.txt
 ```
 
-If the **requirements.txt** file is not present, you can install the dependencies manually:* **Install Pyside6**
+If the **requirements.txt** file is not present, you can install the dependencies manually.
+
+- **Install Pyside6**
 
 ```bash
-pip install pyside6 
+pip install pyside6
 ```
 
 - **Install qdarktheme**
@@ -124,13 +130,13 @@ pip install qdarktheme
 
 **4. Run the Program**
 
-With the environment configured and dependencies installed, you can now run the system:
+With the environment configured and dependencies installed, you can now run the system.
 
 ```bash
 python biblioteca.py
 ```
 
-**Or**
+Or
 
 ```bash
 python3 biblioteca.py
@@ -143,6 +149,6 @@ If the code presents any error during execution, verify if all necessary files a
 
 ## 🫂 Contributors
 
-| <span style="color:black;">[Camila Cavalcante - 2320133944](https://github.com/CamilaSilvaC)</span> | <span style="color:black;">[Luísa Ferreira - 232014807](https://github.com/luisa12ll)</span> |
+| [Camila Cavalcante - 232013944](https://github.com/CamilaSilvaC) | [Luísa Ferreira - 232014807](https://github.com/luisa12ll) |
 | :---: | :---: |
 | <div align="center"><img src="https://github.com/CamilaSilvaC.png" alt="camila" width="400"></div> | <div align="center"><img src="https://github.com/luisa12ll.png" alt="luisa" width="400"></div> |
